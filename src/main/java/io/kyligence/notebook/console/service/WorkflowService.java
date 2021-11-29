@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class WorkflowService implements FileInterface {
@@ -355,7 +356,7 @@ public class WorkflowService implements FileInterface {
         if (execFileInfo == null) {
             throw new ByzerException(ErrorCodeEnum.WORKFLOW_NOT_EXIST);
         }
-        if (!user.equalsIgnoreCase(execFileInfo.getUser())) {
+        if (!user.equalsIgnoreCase(execFileInfo.getUser()) && !user.equalsIgnoreCase("admin")) {
             throw new ByzerException(ErrorCodeEnum.WORKFLOW_NOT_AVAILABLE);
         }
     }
@@ -507,6 +508,21 @@ public class WorkflowService implements FileInterface {
         modelInfo.setPath(nodeContent.getModelFullPath());
         modelInfoRepository.save(modelInfo);
 
+    }
+
+    public WorkflowContentDTO getWorkflowContent(String user, Integer workflowId){
+        WorkflowInfo workflowInfo = findById(workflowId);
+        checkExecFileAvailable(user, workflowInfo);
+        List<NodeInfo> nodeInfoList = findNodeByWorkflow(workflowId);
+        Map<Integer, ConnectionInfo> connectionInfoMap = getUserConnectionMap(workflowInfo.getUser());
+        Map<String, List<ParamDefDTO>> algoParams = getAlgoParamSettings();
+        return WorkflowContentDTO.valueOf(workflowInfo, nodeInfoList, connectionInfoMap, algoParams);
+    }
+
+    public String getWorkflowScripts(String user, Integer workflowId){
+        WorkflowContentDTO content = getWorkflowContent(user, workflowId);
+        List<String> scripts = content.getCellList().stream().map(WorkflowContentDTO.WorkflowCellContent::getContent).collect(Collectors.toList());
+        return String.join("\n", scripts);
     }
 
     public void checkResourceLimit(String user, Integer newResourceNum) {

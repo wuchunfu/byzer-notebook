@@ -1,6 +1,7 @@
 package io.kyligence.notebook.console.service;
 
 import io.kyligence.notebook.console.NotebookConfig;
+import io.kyligence.notebook.console.bean.dto.CellInfoDTO;
 import io.kyligence.notebook.console.bean.dto.CodeSuggestDTO;
 import io.kyligence.notebook.console.bean.dto.ExecFileDTO;
 import io.kyligence.notebook.console.bean.dto.NotebookDTO;
@@ -29,6 +30,7 @@ import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class NotebookService implements FileInterface {
@@ -44,6 +46,9 @@ public class NotebookService implements FileInterface {
 
     @Autowired
     private NotebookHelper notebookHelper;
+
+    @Autowired
+    private SchedulerService schedulerService;
 
     @Autowired
     private EngineService engineService;
@@ -147,6 +152,9 @@ public class NotebookService implements FileInterface {
 
     @Transactional
     public void delete(Integer id) {
+        if (schedulerService.entityUsedInSchedule("notebook", id)){
+            throw new ByzerException("Notebook used in schedule");
+        }
         // 1. delete notebook info
         notebookRepository.deleteById(id);
 
@@ -167,7 +175,7 @@ public class NotebookService implements FileInterface {
         if (execFileInfo == null) {
             throw new ByzerException(ErrorCodeEnum.NOTEBOOK_NOT_EXIST);
         }
-        if (!user.equalsIgnoreCase(execFileInfo.getUser())) {
+        if (!user.equalsIgnoreCase(execFileInfo.getUser()) && !user.equalsIgnoreCase("admin")) {
             throw new ByzerException(ErrorCodeEnum.NOTEBOOK_NOT_AVAILABLE);
         }
     }
@@ -243,5 +251,11 @@ public class NotebookService implements FileInterface {
         }
         List<CodeSuggestDTO> codeSuggests = JacksonUtils.readJsonArray(result, CodeSuggestDTO.class);
         return codeSuggests;
+    }
+
+    public String getNotebookScripts(String user, Integer notebookId){
+        NotebookDTO notebook = getNotebook(notebookId, user);
+        List<String> scripts = notebook.getCellList().stream().map(CellInfoDTO::getContent).collect(Collectors.toList());
+        return String.join("\n", scripts);
     }
 }
